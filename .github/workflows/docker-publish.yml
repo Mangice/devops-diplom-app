@@ -1,4 +1,4 @@
-name: Build and publish Docker image
+name: Build, publish, and deploy
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  build-and-push:
+  build-push-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -34,3 +34,26 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/devops-diplom:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/devops-diplom:${{ github.sha }}
+
+      - name: Configure SSH
+        env:
+          VM_SSH_PRIVATE_KEY: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.VM_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$VM_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy to virtual machine
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          ssh "$VM_USER@$VM_HOST" "mkdir -p /home/$VM_USER/devops-diplom"
+          printf 'DOCKERHUB_USERNAME=%s\nIMAGE_TAG=%s\n' "$DOCKERHUB_USERNAME" "$IMAGE_TAG" > .env
+          scp compose.yaml .env "$VM_USER@$VM_HOST:/home/$VM_USER/devops-diplom/"
+          ssh "$VM_USER@$VM_HOST" "cd /home/$VM_USER/devops-diplom && docker compose pull && docker compose up -d --remove-orphans"
