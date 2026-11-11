@@ -45,6 +45,11 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "$VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
+     
+      - name: Add VM host key
+        run: ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
 
       - name: Deploy to virtual machine
         env:
